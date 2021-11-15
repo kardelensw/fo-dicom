@@ -71,3 +71,4 @@ Platform/Mono/Dictionaries/*.xml.gz
 # Documentation generation
 /Documentation/log.txt
 /Documentation/**/_site/
+.output/*
