@@ -114,7 +114,7 @@ namespace FellowOakDicom.Serialization
             writer.WriteStartObject();
             foreach (var item in value)
             {
-                if (((uint)item.Tag & 0xffff) == 0)
+                if (((uint)item.Tag & 0xffff) == 0 || (!(item is DicomElement) && !(item is DicomSequence)))
                 {
                     // Group length (gggg,0000) attributes shall not be included in a DICOM JSON Model object.
                     continue;
@@ -371,7 +371,7 @@ namespace FellowOakDicom.Serialization
                 writer.WriteStartArray();
                 foreach (var val in elem.Get<string[]>())
                 {
-                    if (string.IsNullOrEmpty(val))
+                    if (string.IsNullOrEmpty(val.Replace("\u0001", "").Replace("\u0000", "")))
                     {
                         writer.WriteNullValue();
                     }
