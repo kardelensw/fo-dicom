@@ -7,9 +7,7 @@
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>fo-dicom.snk</AssemblyOriginatorKeyFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <Version>5.0.1-krmd</Version>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>5.0.3</Version>
+    <Version>5.0.3-krmd</Version>
     <Authors>fo-dicom contributors</Authors>
     <Product>Fellow Oak DICOM</Product>
     <Description>A NetStandard logging library for fo-dicom to integrate NLog.</Description>
@@ -27,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NLog" Version="4.7.11" />
+    <PackageReference Include="NLog" Version="5.0.1" />
   </ItemGroup>
 
   <ItemGroup>
