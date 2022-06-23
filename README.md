@@ -4,6 +4,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/fo-dicom.svg)](https://www.nuget.org/packages/fo-dicom/)
 ![build development](https://github.com/fo-dicom/fo-dicom/workflows/build/badge.svg?branch=development)
+[![codecov](https://codecov.io/gh/fo-dicom/fo-dicom/branch/development/graph/badge.svg)](https://codecov.io/gh/fo-dicom/fo-dicom)
 [![Join the chat at https://gitter.im/fo-dicom/fo-dicom](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/fo-dicom/fo-dicom?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ### License
@@ -11,7 +12,7 @@ This library is licensed under the [Microsoft Public License (MS-PL)](http://ope
 
 ### Features
 * Targets .NET Standard 2.0
-* DICOM dictionary version 2021b
+* DICOM dictionary version 2022b
 * High-performance, fully asynchronous `async`/`await` API
 * JPEG (including lossless), JPEG-LS, JPEG2000, and RLE image compression (via additional package)
 * Supports very large datasets with content loading on demand
@@ -47,7 +48,7 @@ Documentation, including API documentation, is available via GitHub pages:
 ### Usage Notes
 
 #### Image rendering configuration
-Out-of-the-box, *fo-dicom* for defaults to a internal class *FellowOakDicom.Imaging.IImage*-style image rendering. To switch to Desktop-style or ImageSharp-style image rendering, you first have to add the nuget packe you desire and then call:
+Out-of-the-box, *fo-dicom* defaults to an internal class *FellowOakDicom.Imaging.IImage*-style image rendering. To switch to Desktop-style or ImageSharp-style image rendering, you first have to add the nuget package you desire and then call:
 
     new DicomSetupBuilder()
         .RegisterServices(s => s.AddFellowOakDicom().AddImageManager<WinFormsImageManager>())
@@ -188,6 +189,45 @@ private static Task<DicomNEventReportResponse> OnNEventReportRequest(DicomNEvent
         Console.WriteLine("SOP Instance UID: {0}", item.GetString(DicomTag.ReferencedSOPInstanceUID));
     }
     return Task.FromResult(new DicomNEventReportResponse(request, DicomStatus.Success));
+}
+```
+
+#### C-ECHO with advanced DICOM client connection: manual control over TCP connection and DICOM association
+```csharp
+var cancellationToken = CancellationToken.None;
+// Alternatively, inject IDicomServerFactory via dependency injection instead of using this static method
+using var server = DicomServerFactory.Create<DicomCEchoProvider>(12345); 
+
+var connectionRequest = new AdvancedDicomClientConnectionRequest
+{
+    NetworkStreamCreationOptions = new NetworkStreamCreationOptions
+    {
+        Host = "127.0.0.1",
+        Port = server.Port,
+    }
+};
+
+// Alternatively, inject IAdvancedDicomClientConnectionFactory via dependency injection instead of using this static method
+using var connection = await AdvancedDicomClientConnectionFactory.OpenConnectionAsync(connectionRequest, cancellationToken);
+
+var associationRequest = new AdvancedDicomClientAssociationRequest
+{
+    CallingAE = "EchoSCU",
+    CalledAE = "EchoSCP"
+};
+
+var cEchoRequest = new DicomCEchoRequest();
+
+using var association = await connection.OpenAssociationAsync(associationRequest, cancellationToken);
+try
+{
+    DicomCEchoResponse cEchoResponse = await association.SendCEchoRequestAsync(cEchoRequest, cancellationToken).ConfigureAwait(false);
+    
+    Console.WriteLine(cEchoResponse.Status);
+}
+finally
+{
+    await association.ReleaseAsync(cancellationToken);
 }
 ```
 

@@ -47,7 +47,8 @@ namespace FellowOakDicom.IO.Reader
         private static readonly DicomTag _FileMetaInfoStopTag = new DicomTag(0x0002, 0xffff);
 
         private static readonly Func<ParseState, bool> _FileMetaInfoStopCriterion =
-            state => state.Tag.CompareTo(_FileMetaInfoStopTag) >= 0;
+            state => state.Tag.CompareTo(_FileMetaInfoStopTag) >= 0
+                || (state.PreviousTag?.Group == 0x0002 && state.PreviousTag.CompareTo(state.Tag) >= 0);
 
         private readonly object _locker;
 
@@ -258,7 +259,7 @@ namespace FellowOakDicom.IO.Reader
                 throw new DicomReaderException("Attempted to read invalid DICOM file");
             }
 
-            // Adopt transfer syntax endianess to byte source.
+            // Adopt transfer syntax endianness to byte source.
             source.Endian = syntax.Endian;
         }
 

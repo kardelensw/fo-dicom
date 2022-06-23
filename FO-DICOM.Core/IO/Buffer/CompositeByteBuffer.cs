@@ -1,6 +1,8 @@
 ﻿// Copyright (c) 2012-2021 fo-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+using FellowOakDicom.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,23 +18,45 @@ namespace FellowOakDicom.IO.Buffer
     /// </summary>
     public class CompositeByteBuffer : IByteBuffer
     {
+        private readonly IMemoryProvider _memoryProvider;
+
         #region CONSTRUCTORS
 
         /// <summary>
         /// Initializes an instance of the <see cref="CompositeByteBuffer"/> class.
         /// </summary>
         /// <param name="buffers">Collection of buffers to initially constitute the <see cref="CompositeByteBuffer"/> instance.</param>
-        public CompositeByteBuffer(IEnumerable<IByteBuffer> buffers)
+        public CompositeByteBuffer(IEnumerable<IByteBuffer> buffers): this(Setup.ServiceProvider.GetRequiredService<IMemoryProvider>(), buffers)
         {
-            Buffers = new List<IByteBuffer>(buffers);
         }
 
         /// <summary>
         /// Initializes an instance of the <see cref="CompositeByteBuffer"/> class.
         /// </summary>
         /// <param name="buffers">Array of buffers to initially constitute the <see cref="CompositeByteBuffer"/> instance.</param>
-        public CompositeByteBuffer(params IByteBuffer[] buffers)
+        public CompositeByteBuffer(params IByteBuffer[] buffers): this(Setup.ServiceProvider.GetRequiredService<IMemoryProvider>(), buffers)
         {
+        }
+
+        /// <summary>
+        /// Initializes an instance of the <see cref="CompositeByteBuffer"/> class.
+        /// </summary>
+        /// <param name="memoryProvider">The memory provider that will be used to allocate buffers</param>
+        /// <param name="buffers">Collection of buffers to initially constitute the <see cref="CompositeByteBuffer"/> instance.</param>
+        public CompositeByteBuffer(IMemoryProvider memoryProvider, IEnumerable<IByteBuffer> buffers)
+        {
+            _memoryProvider = memoryProvider ?? throw new ArgumentNullException(nameof(memoryProvider));
+            Buffers = new List<IByteBuffer>(buffers);
+        }
+
+        /// <summary>
+        /// Initializes an instance of the <see cref="CompositeByteBuffer"/> class.
+        /// </summary>
+        /// <param name="memoryProvider">The memory provider that will be used to allocate buffers</param>
+        /// <param name="buffers">Array of buffers to initially constitute the <see cref="CompositeByteBuffer"/> instance.</param>
+        public CompositeByteBuffer(IMemoryProvider memoryProvider, params IByteBuffer[] buffers)
+        {
+            _memoryProvider = memoryProvider ?? throw new ArgumentNullException(nameof(memoryProvider));
             Buffers = new List<IByteBuffer>(buffers);
         }
 
@@ -46,7 +70,21 @@ namespace FellowOakDicom.IO.Buffer
         public IList<IByteBuffer> Buffers { get; }
 
         /// <inheritdoc />
-        public bool IsMemory => true;
+        public bool IsMemory
+        {
+            get
+            {
+                foreach (var b in Buffers)
+                {
+                    if (!b.IsMemory)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
 
         /// <inheritdoc />
         public long Size => Buffers.Sum(x => x.Size);
@@ -70,17 +108,8 @@ namespace FellowOakDicom.IO.Buffer
         #endregion
 
         #region METHODS
-
+        
         /// <inheritdoc />
-        public byte[] GetByteRange(long offset, int count)
-        {
-            var data = new byte[count];
-
-            GetByteRange(offset, count, data);
-
-            return data;
-        }
-
         public void GetByteRange(long offset, int count, byte[] output)
         {
             if (output == null)
@@ -107,11 +136,11 @@ namespace FellowOakDicom.IO.Buffer
                 {
                    System.Buffer.BlockCopy(Buffers[pos].Data, (int)offset, output, offset2, remain);
                 }
-
                 else
                 {
-                    var temp = Buffers[pos].GetByteRange(offset, remain);
-                    System.Buffer.BlockCopy(temp, 0, output, offset2, remain);
+                    using IMemory temp = _memoryProvider.Provide(remain);
+                    Buffers[pos].GetByteRange(offset, remain, temp.Bytes);
+                    System.Buffer.BlockCopy(temp.Bytes, 0, output, offset2, remain);
                 }
 
                 count -= remain;
@@ -122,7 +151,6 @@ namespace FellowOakDicom.IO.Buffer
                 }
             }
         }
-
 
         public void CopyToStream(Stream stream)
         {

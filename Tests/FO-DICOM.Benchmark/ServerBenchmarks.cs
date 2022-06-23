@@ -5,85 +5,88 @@ using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
+using FellowOakDicom.Log;
 using FellowOakDicom.Network;
 using FellowOakDicom.Network.Client;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FellowOakDicom.Benchmark
 {
     [MemoryDiagnoser]
+    [MaxIterationCount(25)]
+    [MaxWarmupCount(10)]
+    [InvocationCount(128,16)]
     public class ServerBenchmarks
     {
-
-        private string _rootpath;
+        private string _rootPath;
         private DicomFile _sampleFile;
-        private IDicomServer _server;
+        private IDicomServer _cStoreServer;
+        private IDicomServerFactory _dicomServerFactory;
+        private IDicomClientFactory _dicomClientFactory;
+        private IDicomServer _cEchoServer;
+        private IDicomClient _cEchoClient;
+        private IDicomClient _cStoreClient;
 
         [GlobalSetup]
         public void Setup()
         {
-            _rootpath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            _sampleFile = DicomFile.Open(Path.Combine(_rootpath, "Data\\GH355.dcm"));
-            _server = DicomServerFactory.Create<NopCStoreProvider>(11113);
+            var services = new ServiceCollection();
+
+            services.AddFellowOakDicom()
+                .AddLogManager<NullLoggerManager>()
+                .Configure<DicomClientOptions>(o =>
+                {
+                    o.AssociationLingerTimeoutInMs = 0;
+                })
+                .Configure<DicomServiceOptions>(o =>
+                {
+                    o.LogDataPDUs = false;
+                    o.LogDimseDatasets = false;
+                    o.MaxPDULength = 512 * 1024 * 1024;
+                });
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            _dicomServerFactory = serviceProvider.GetRequiredService<IDicomServerFactory>();
+            _dicomClientFactory = serviceProvider.GetRequiredService<IDicomClientFactory>();
+
+            _rootPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            _sampleFile = DicomFile.Open(Path.Combine(_rootPath, "Data\\GH355.dcm"));
+            _cStoreServer = _dicomServerFactory.Create<NopCStoreProvider>(11118);
+            _cEchoServer = _dicomServerFactory.Create<DicomCEchoProvider>(11119);
+            _cEchoClient = _dicomClientFactory.Create("127.0.0.1", _cEchoServer.Port, false, "SCU", "ANY-SCP");
+            _cEchoClient.ServiceOptions.LogDimseDatasets = false;
+            _cEchoClient.ServiceOptions.LogDataPDUs = false;
+            _cEchoClient.ClientOptions.AssociationLingerTimeoutInMs = 0;
+            _cEchoClient.ClientOptions.MaximumNumberOfRequestsPerAssociation = 1;
+            _cStoreClient = _dicomClientFactory.Create("127.0.0.1", _cStoreServer.Port, false, "SCU", "ANY-SCP");
+            _cStoreClient.ServiceOptions.LogDimseDatasets = false;
+            _cStoreClient.ServiceOptions.LogDataPDUs = false;
+            _cStoreClient.ClientOptions.AssociationLingerTimeoutInMs = 0;
+            _cStoreClient.ClientOptions.MaximumNumberOfRequestsPerAssociation = 1;
         }
 
         [GlobalCleanup]
         public void Teardown()
         {
-            _server.Stop();
-            _server.Dispose();
+            _cStoreServer.Stop();
+            _cEchoServer.Stop();
+            _cStoreServer.Dispose();
+            _cEchoServer.Dispose();
         }
-
-        [Benchmark]
-        public void StartServer()
-        {
-            var port = 11112;
-            using (DicomServerFactory.Create<DicomCEchoProvider>(port))
-            {
-                // do nothing here
-            }
-        }
-
 
         [Benchmark]
         public async Task SendEchoToServer()
         {
-            var port = 11112;
-            using (var server = DicomServerFactory.Create<DicomCEchoProvider>(port))
-            {
-                var client = DicomClientFactory.Create("127.0.0.1", port, false, "SCU", "ANY-SCP");
-                client.ServiceOptions.LogDimseDatasets = false;
-                client.ServiceOptions.LogDataPDUs = false;
-                await client.AddRequestAsync(new DicomCEchoRequest());
-                await client.SendAsync();
-                server.Stop();
-            }
-        }
-
-
-        [Benchmark]
-        public async Task SendStoreToNewServer()
-        {
-            var port = 11112;
-            using (var server = DicomServerFactory.Create<NopCStoreProvider>(port))
-            {
-                var client = DicomClientFactory.Create("127.0.0.1", port, false, "SCU", "ANY-SCP");
-                client.ServiceOptions.LogDimseDatasets = false;
-                client.ServiceOptions.LogDataPDUs = false;
-                await client.AddRequestAsync(new DicomCStoreRequest(_sampleFile));
-                await client.SendAsync();
-                server.Stop();
-            }
+            await _cEchoClient.AddRequestAsync(new DicomCEchoRequest());
+            await _cEchoClient.SendAsync();
         }
 
         [Benchmark]
-        public async Task SendStoreToExistingServer()
+        public async Task SendStoreToServer()
         {
-            var client = DicomClientFactory.Create("127.0.0.1", _server.Port, false, "SCU", "ANY-SCP");
-            client.ServiceOptions.LogDimseDatasets = false;
-            client.ServiceOptions.LogDataPDUs = false;
-            await client.AddRequestAsync(new DicomCStoreRequest(_sampleFile));
-            await client.SendAsync();
+            await _cStoreClient.AddRequestAsync(new DicomCStoreRequest(_sampleFile));
+            await _cStoreClient.SendAsync();
         }
-
     }
 }

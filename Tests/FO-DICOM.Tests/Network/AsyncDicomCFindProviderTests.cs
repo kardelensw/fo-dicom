@@ -16,7 +16,7 @@ using Xunit.Abstractions;
 
 namespace FellowOakDicom.Tests.Network
 {
-    [Collection("Network")]
+    [Collection("Network"), Trait("Category", "Network")]
     public class AsyncDicomCFindProviderTests
     {
         private readonly XUnitDicomLogger _logger;
@@ -37,7 +37,8 @@ namespace FellowOakDicom.Tests.Network
             using (DicomServerFactory.Create<ImmediateSuccessAsyncDicomCFindProvider>(port, logger: _logger.IncludePrefix("DicomServer")))
             {
                 var client = DicomClientFactory.Create("127.0.0.1", port, false, "SCU", "ANY-SCP");
-                client.Logger = _logger.IncludePrefix(typeof(DicomClient).Name);
+                client.Logger = _logger.IncludePrefix(nameof(DicomClient));
+                client.ClientOptions.AssociationRequestTimeoutInMs = (int) TimeSpan.FromMinutes(5).TotalMilliseconds;
 
                 DicomCFindResponse response = null;
                 DicomRequest.OnTimeoutEventArgs timeout = null;
@@ -65,6 +66,7 @@ namespace FellowOakDicom.Tests.Network
             {
                 var client = DicomClientFactory.Create("127.0.0.1", port, false, "SCU", "ANY-SCP");
                 client.Logger = _logger.IncludePrefix(typeof(DicomClient).Name);
+                client.ClientOptions.AssociationRequestTimeoutInMs = (int) TimeSpan.FromMinutes(5).TotalMilliseconds;
 
                 var responses = new ConcurrentQueue<DicomCFindResponse>();
                 DicomRequest.OnTimeoutEventArgs timeout = null;
@@ -93,8 +95,8 @@ namespace FellowOakDicom.Tests.Network
     public class ImmediateSuccessAsyncDicomCFindProvider : DicomService, IDicomServiceProvider, IDicomCFindProvider
     {
         public ImmediateSuccessAsyncDicomCFindProvider(INetworkStream stream, Encoding fallbackEncoding, Logger log,
-            ILogManager logManager, INetworkManager networkManager, ITranscoderManager transcoderManager)
-            : base(stream, fallbackEncoding, log, logManager, networkManager, transcoderManager)
+            DicomServiceDependencies dependencies)
+            : base(stream, fallbackEncoding, log, dependencies)
         {
         }
 
@@ -136,9 +138,8 @@ namespace FellowOakDicom.Tests.Network
     public class PendingAsyncDicomCFindProvider : DicomService, IDicomServiceProvider, IDicomCFindProvider
     {
         public PendingAsyncDicomCFindProvider(INetworkStream stream, Encoding fallbackEncoding, Logger log,
-            ILogManager logManager, INetworkManager networkManager,
-            ITranscoderManager transcoderManager)
-            : base(stream, fallbackEncoding, log, logManager, networkManager, transcoderManager)
+            DicomServiceDependencies dependencies)
+            : base(stream, fallbackEncoding, log, dependencies)
         {
         }
 
@@ -171,8 +172,11 @@ namespace FellowOakDicom.Tests.Network
 
         public async IAsyncEnumerable<DicomCFindResponse> OnCFindRequestAsync(DicomCFindRequest request)
         {
+            await Task.Yield();
             yield return new DicomCFindResponse(request, DicomStatus.Pending);
+            await Task.Yield();
             yield return new DicomCFindResponse(request, DicomStatus.Pending);
+            await Task.Yield();
             yield return new DicomCFindResponse(request, DicomStatus.Success);
         }
 

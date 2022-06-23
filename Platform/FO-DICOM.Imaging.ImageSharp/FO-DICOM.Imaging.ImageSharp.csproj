@@ -6,6 +6,8 @@
     <AssemblyName>fo-dicom.Imaging.ImageSharp</AssemblyName>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <Version>5.0.1-krmd</Version>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>5.0.3</Version>
     <Authors>fo-dicom contributors</Authors>
     <Company>fo-dicom</Company>
     <Product>Fellow Oak DICOM</Product>
@@ -18,6 +20,7 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <RepositoryUrl>https://github.com/kardelensw/fo-dicom.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

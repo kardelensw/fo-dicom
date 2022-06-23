@@ -27,7 +27,9 @@ namespace FellowOakDicom.Network
 
         private readonly List<RunningDicomService> _services;
 
-        private readonly CancellationTokenSource _cancellationSource;
+        private readonly CancellationTokenSource _cancellationSource;       
+
+        private readonly CancellationToken _cancellationToken;
 
         private string _ipAddress;
 
@@ -60,14 +62,13 @@ namespace FellowOakDicom.Network
         /// <summary>
         /// Initializes an instance of the <see cref="DicomServer{T}"/> class.
         /// </summary>
-        public DicomServer(
-            INetworkManager networkManager,
-            ILogManager logManager)
+        public DicomServer(DicomServerDependencies dependencies)
         {
-            _networkManager = networkManager ?? throw new ArgumentNullException(nameof(networkManager));
-            _logManager = logManager ?? throw new ArgumentNullException(nameof(logManager));
+            _networkManager = dependencies.NetworkManager ?? throw new ArgumentNullException(nameof(dependencies.NetworkManager));
+            _logManager = dependencies.LogManager ?? throw new ArgumentNullException(nameof(dependencies.LogManager));
 
             _cancellationSource = new CancellationTokenSource();
+            _cancellationToken = _cancellationSource.Token;
             _services = new List<RunningDicomService>();
 
             IsListening = false;
@@ -277,12 +278,12 @@ namespace FellowOakDicom.Network
                 await listener.StartAsync().ConfigureAwait(false);
                 IsListening = true;
 
-                while (!_cancellationSource.IsCancellationRequested)
+                while (!_cancellationToken.IsCancellationRequested)
                 {
                     await _hasNonMaxServicesFlag.WaitAsync().ConfigureAwait(false);
 
                     var networkStream = await listener
-                        .AcceptNetworkStreamAsync(_certificateName, noDelay, _cancellationSource.Token)
+                        .AcceptNetworkStreamAsync(_certificateName, noDelay, _cancellationToken)
                         .ConfigureAwait(false);
 
                     if (networkStream != null)
@@ -330,7 +331,7 @@ namespace FellowOakDicom.Network
         /// </summary>
         private async Task RemoveUnusedServicesAsync()
         {
-            while (!_cancellationSource.IsCancellationRequested)
+            while (!_cancellationToken.IsCancellationRequested)
             {
                 try
                 {
@@ -340,8 +341,12 @@ namespace FellowOakDicom.Network
                     {
                         runningDicomServiceTasks = _services.Select(s => s.Task).ToList();
                     }
-                    await Task.WhenAny(runningDicomServiceTasks).ConfigureAwait(false);
-                    
+
+                    if (runningDicomServiceTasks.Count > 0)
+                    {
+                        await Task.WhenAny(runningDicomServiceTasks).ConfigureAwait(false);
+                    }
+
                     lock (_services)
                     {
                         for (int i = _services.Count - 1; i >= 0; i--)

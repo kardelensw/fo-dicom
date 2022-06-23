@@ -174,8 +174,9 @@ namespace FellowOakDicom.Tests.Network
             var port = Ports.GetNext();
 
             using var server = DicomServerFactory.Create<DicomCEchoProvider>(port, logger: _logger.IncludePrefix("DicomServer"));
+            while (!server.IsListening) { Thread.Sleep(10); }
             server.Stop();
-            Thread.Sleep(1000);
+            while (server.IsListening) { Thread.Sleep(10); }
 
             var dicomServer = DicomServerRegistry.Get(port)?.DicomServer;
             Assert.NotNull(dicomServer);
@@ -451,20 +452,17 @@ namespace FellowOakDicom.Tests.Network
 
         public class DicomCEchoProviderServer : DicomServer<DicomCEchoProvider>
         {
-            private readonly ILogManager _logManager;
-            private readonly INetworkManager _networkManager;
-            private readonly ITranscoderManager _transcoderManager;
+            private readonly DicomServiceDependencies _dicomServiceDependencies;
 
-            public DicomCEchoProviderServer(ILogManager logManager, INetworkManager networkManager, ITranscoderManager transcoderManager) :
-                base(networkManager, logManager)
+            public DicomCEchoProviderServer(DicomServerDependencies dicomServerDependencies,
+                DicomServiceDependencies dicomServiceDependencies) :
+                base(dicomServerDependencies)
             {
-                _logManager = logManager ?? throw new ArgumentNullException(nameof(logManager));
-                _networkManager = networkManager;
-                _transcoderManager = transcoderManager;
+                _dicomServiceDependencies = dicomServiceDependencies;
             }
 
             protected override DicomCEchoProvider CreateScp(INetworkStream stream)
-                => new DicomCEchoProvider(stream, null, _logManager.GetLogger("DicomEchoProvider"), _logManager, _networkManager, _transcoderManager);
+                => new DicomCEchoProvider(stream, null, _dicomServiceDependencies.LogManager.GetLogger("DicomEchoProvider"), _dicomServiceDependencies);
         }
 
         #endregion
